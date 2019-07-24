@@ -53,8 +53,8 @@ pipeline {
             steps {
                 ansiblePlaybook(
                     credentialsId: 'server_ssh_key',
-                    inventory: 'pipeline/hosts',
-                    playbook:  'pipeline/deploy.yml',
+                    inventory: 'hosts',
+                    playbook:  'deploy.yml',
                     extraVars: [
                         project: 'jenkins-hack-session-project',
                         basedir: '/tmp/jenkins-hack-session-project',
