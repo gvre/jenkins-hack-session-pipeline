@@ -1,0 +1,94 @@
+---
+# Deploy project
+- hosts: localhost
+  gather_facts: False
+  tasks:
+  - name: Get current datetime
+    command: date -u +%Y%m%d-%H%M%S
+    register: datetime
+
+  - name: Remove previous tarball if exists
+    file:
+      path: "/tmp/{{ project }}.tar.gz"
+      state: absent
+
+  - name: Remove possible leftover files
+    shell: find "{{ basedir }}/" \( -name '*.retry' -o -name '*.bak' -o -name '*.orig' -o -name .DS_Store -o -name Thumbs.db -o -name 'Dockerfile*' -o -name 'Jenkinsfile*' -o -name '*.swp'  \) -print0 | xargs -0 rm -f
+
+  - name: Remove unnecessary files from vendor directory
+    shell: find "{{ basedir }}/vendor/" \( -name .gitignore -o -name .git -o -name tests -o -name phpunit.xml -o -name README.md -o -name composer.json -o -name composer.lock \) -print0 | xargs -0 rm -rf
+
+  - name: Remove unnecessary files from project directory
+    file:
+      path: "{{ basedir }}/{{ item }}"
+      state: absent
+    with_items:
+      - .git
+      - .gitignore
+      - README.md
+      - Makefile
+      - phpunit.xml
+      - .phpunit.result.cache
+      - composer.json
+      - composer.lock
+      - symfony.lock
+      - swagger.yml
+      - swagger.yaml
+      - tests
+      - build
+      - .php_cs
+      - bin
+      - CHANGELOG
+      - .editorconfig
+
+  - name: Create tarball
+    archive:
+      path: "{{ basedir }}/."
+      dest: "/tmp/{{ project }}.tar.gz"
+      format: gz
+
+- hosts: "{{ target }}"
+  gather_facts: False
+  become: true
+  become_method: sudo
+  become_user: root
+  tasks:
+  - name: Create destination directory
+    file:
+      path: "/var/www/html/{{ project }}-{{ hostvars.localhost.datetime.stdout }}"
+      state: directory
+      mode: 0755
+      owner: apache
+      group: apache
+
+  - name: Extract code
+    unarchive:
+      src: "/tmp/{{ project }}.tar.gz"
+      dest: "/var/www/html/{{ project }}-{{ hostvars.localhost.datetime.stdout }}"
+      mode: 0755
+      owner: apache
+      group: apache
+
+  - name: Create new link
+    file:
+      src: "/var/www/html/{{ project }}-{{ hostvars.localhost.datetime.stdout }}"
+      dest: "/var/www/html/{{ project }}"
+      state: link
+      force: True
+
+  - name: Remove old deployments
+    shell: find /var/www/html -maxdepth 1 -type d -regextype posix-extended -regex '.*/{{ project }}-([0-9]+)-([0-9]+)' | sort -rn | tail -n +3 | xargs rm -rf
+    args:
+      executable: /bin/bash
+
+- hosts: localhost
+  connection: local
+  gather_facts: False
+  tasks:
+  - name: Remove local temporary files
+    file:
+      path: "{{ item }}"
+      state: absent
+    with_items:
+      - "{{ basedir }}"
+      - "/tmp/{{ project }}.tar.gz"

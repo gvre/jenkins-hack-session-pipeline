@@ -1,0 +1,5 @@
+[all:vars]
+ansible_user=jenkins
+
+[production]
+46.101.166.166
